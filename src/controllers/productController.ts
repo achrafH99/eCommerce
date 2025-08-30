@@ -8,6 +8,20 @@ export const getProducts = async (req: Request, res: Response) => {
   res.json(data);
 };
 
+export const getProductById = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .eq('id', id)
+    .single(); 
+
+  if (error) return res.status(500).json({ error: error.message });
+  if (!data) return res.status(404).json({ error: 'Produit introuvable' });
+
+  res.json(data as Product);
+};
 export const addProduct = async (req: Request, res: Response) => {
   const { name, price, mainImage, images, description }: Product = req.body;
   const { data, error } = await supabase
