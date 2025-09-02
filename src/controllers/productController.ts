@@ -21,7 +21,7 @@ export const uploadImage = [
         });
       
 
-      if (error) return res.status(500).json({ error: error.message });
+      if (uploadError) return res.status(500).json({ error: uploadError.message });
 
       const { data: publicUrl } = supabase.storage
         .from('product-images')
