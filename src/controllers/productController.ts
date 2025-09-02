@@ -96,3 +96,54 @@ export const deleteProduct = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Erreur lors de la suppression du produit' });
   }
 };
+
+export const updateProduct = [
+  upload.array('files'),
+  async (req: any, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { name, price, description, mainImage: mainFromClient } = req.body;
+      
+      const { data: existingProduct, error: fetchError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (fetchError) return res.status(500).json({ error: fetchError.message });
+      if (!existingProduct) return res.status(404).json({ error: 'Produit introuvable' });
+
+      const urls: string[] = [];
+
+      if (req.files && req.files.length > 0) {
+        for (const file of req.files) {
+          const fileName = `${Date.now()}-${file.originalname.replace(/\s+/g, '-')}`;
+          const { error } = await supabase.storage
+            .from('product-images')
+            .upload(fileName, file.buffer, { contentType: file.mimetype, upsert: true });
+          if (!error) {
+            const { data: publicUrl } = supabase.storage.from('product-images').getPublicUrl(fileName);
+            urls.push(publicUrl.publicUrl);
+          }
+        }
+      }
+
+      if (req.body.images) {
+        const existing: string[] = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
+        urls.push(...existing.filter((u) => u && !urls.includes(u)));
+      }
+
+      const mainImage = mainFromClient || urls[0] || '';
+
+      const { data, error: updateError } = await supabase
+        .from('products')
+        .update({ name, price, description, mainImage, images: urls })
+        .eq('id', id);
+
+      if (updateError) return res.status(500).json({ error: updateError.message });
+      res.json(data);
+    } catch (e) {
+      console.error('Erreur modification produit :', e);
+      res.status(500).json({ error: 'Erreur modification produit' });
+    }
+  },
+];
