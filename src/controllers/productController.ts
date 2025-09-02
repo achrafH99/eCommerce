@@ -5,35 +5,6 @@ import multer from 'multer';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-export const uploadImage = [
-  upload.single('file'),
-  async (req: any, res: Response) => {
-    try {
-      if (!req.file) return res.status(400).json({ error: 'Aucun fichier' });
-
-      const file = req.file;
-      const fileName = `${Date.now()}-${file.originalname.replace(/\s+/g, '-')}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('product-images')
-        .upload(fileName, file.buffer, {
-          contentType: file.mimetype,
-          upsert: true, 
-        });
-      
-
-      if (uploadError) return res.status(500).json({ error: uploadError.message });
-
-      const { data: publicUrl } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(fileName);
-
-      res.json({ url: publicUrl.publicUrl });
-    } catch (e) {
-      res.status(500).json({ error: 'Erreur upload image' });
-    }
-  },
-];
-
 export const getProducts = async (req: Request, res: Response) => {
   const { data, error } = await supabase.from('products').select('*');
   if (error) return res.status(500).json({ error: error.message });
@@ -57,7 +28,9 @@ export const getProductById = async (req: Request, res: Response) => {
 export const addProduct = [
   upload.array('files'), 
   async (req: any, res: Response) => {
-    console.log(req.body)
+    console.log('Body reçu :', req.body);
+    console.log('Files reçus :', req.files?.map((f: any) => f.originalname));
+
     try {
       const { name, price, description } = req.body;
 
@@ -67,35 +40,49 @@ export const addProduct = [
 
       if (req.files && req.files.length > 0) {
         for (const file of req.files) {
-          const fileName = `${Date.now()}-${file.originalname}`;
-          const { data, error } = await supabase.storage
-            .from('product-images')
-            .upload(fileName, file.buffer, { contentType: file.mimetype });
+          try {
+            const fileName = `${Date.now()}-${file.originalname.replace(/\s+/g, '-')}`;
+            const { data, error } = await supabase.storage
+              .from('product-images')
+              .upload(fileName, file.buffer, { contentType: file.mimetype, upsert: true });
 
-          if (error) return res.status(500).json({ error: error.message });
+            if (error) {
+              console.error(`Erreur upload pour ${file.originalname}:`, error.message);
+              continue; 
+            }
 
-          const { data: publicUrl } = supabase.storage
-            .from('product-images')
-            .getPublicUrl(fileName);
+            const { data: publicUrl } = supabase.storage
+              .from('product-images')
+              .getPublicUrl(fileName);
 
-          urls.push(publicUrl.publicUrl);
+            console.log(`Upload réussi pour ${file.originalname}:`, publicUrl.publicUrl);
+            urls.push(publicUrl.publicUrl);
+          } catch (e) {
+            console.error(`Exception lors de l'upload de ${file.originalname}:`, e);
+          }
         }
       }
 
       const mainImage = urls[0] || ''; 
 
-      const { data, error } = await supabase
+      const { data: insertData, error: insertError } = await supabase
         .from('products')
         .insert([{ name, price, description, mainImage, images: urls }]);
 
-      if (error) return res.status(500).json({ error: error.message });
+      if (insertError) {
+        console.error('Erreur insertion produit :', insertError.message);
+        return res.status(500).json({ error: insertError.message });
+      }
 
-      res.json(data);
+      console.log('Produit créé avec succès :', insertData);
+      res.json(insertData);
     } catch (e) {
+      console.error('Erreur création produit :', e);
       res.status(500).json({ error: 'Erreur création produit' });
     }
   },
 ];
+
 
 export const deleteProduct = async (req: Request, res: Response) => {
   const { id } = req.params;
