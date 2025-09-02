@@ -57,6 +57,7 @@ export const getProductById = async (req: Request, res: Response) => {
 export const addProduct = [
   upload.array('files'), 
   async (req: any, res: Response) => {
+    console.log(req.body)
     try {
       const { name, price, description } = req.body;
 
