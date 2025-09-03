@@ -81,11 +81,23 @@ export const deleteProduct = async (req: Request, res: Response) => {
 
     if (product.images && product.images.length > 0) {
       for (const url of product.images) {
-        const decodedUrl = decodeURIComponent(url.split('/o/')[1].split('?')[0]);
-        const { error } = await supabase.storage.from('product-images').remove([decodedUrl]);
-        if (error) console.error('Erreur suppression image:', error.message);
+        if (!url || typeof url !== 'string' || !url.includes('/product-images/')) {
+          console.warn('Image invalide ignorée:', url);
+          continue;
+        }
+    
+        try {
+          const filePath = url.split('/product-images/')[1];
+          const { error } = await supabase.storage
+            .from('product-images')
+            .remove([filePath]);
+          if (error) console.error('Erreur suppression image:', error.message);
+        } catch (err) {
+          console.error('Erreur parsing URL image:', url, err);
+        }
       }
     }
+    
 
     const { error: deleteError } = await supabase.from('products').delete().eq('id', id);
     if (deleteError) return res.status(500).json({ error: deleteError.message });
